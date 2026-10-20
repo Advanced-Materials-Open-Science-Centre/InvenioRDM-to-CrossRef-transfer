@@ -7,11 +7,11 @@ using System.Xml.Linq;
 
 namespace ConverterPoC;
 
-// Converts an InvenioRDM record (the /api/records/{id} JSON) into a Crossref 5.3.1 deposit.
+// Converts an InvenioRDM record (the /api/records/{id} JSON) into a Crossref deposit.
 // Helpers return null for optional elements that don't apply; XElement ignores null content.
 public static class FromJsonConverter
 {
-    private static readonly XNamespace Crossref = "http://www.crossref.org/schema/5.3.1";
+    private static readonly XNamespace Crossref = CrossrefSchema.Namespace;
     private static readonly XNamespace Jats = "http://www.ncbi.nlm.nih.gov/JATS1";
     private static readonly XNamespace FundRef = CrossrefPrograms.FundRef;
     private static readonly XNamespace AccessIndicators = CrossrefPrograms.AccessIndicators;
@@ -37,9 +37,9 @@ public static class FromJsonConverter
                 new XAttribute(XNamespace.Xmlns + "jats", Jats.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "rel", Relations.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "xsi", Xsi.NamespaceName),
-                new XAttribute("version", "5.3.1"),
+                new XAttribute("version", CrossrefSchema.Version),
                 new XAttribute(Xsi + "schemaLocation",
-                    "http://www.crossref.org/schema/5.3.1 http://www.crossref.org/schemas/crossref5.3.1.xsd"),
+                    $"{CrossrefSchema.Namespace} http://www.crossref.org/schemas/{CrossrefSchema.FileName}"),
                 BuildHead(settings.Depositor),
                 new XElement(Crossref + "body", BuildContent(record.RootElement, settings, doi, recordUrl, registeredType))
             )
@@ -112,7 +112,7 @@ public static class FromJsonConverter
         };
     }
 
-    // Element order in each builder follows crossref5.3.1.xsd
+    // Element order in each builder follows crossref5.5.0.xsd
 
     private static XElement CreateBook(JsonElement root, JsonElement metadata, string doi, string recordUrl) =>
         new(Crossref + "book",
@@ -131,9 +131,11 @@ public static class FromJsonConverter
             )
         );
 
+    // Schema 5.5.0 moved reports out of posted_content into their own record type, but registered
+    // posted-content DOIs can't change type, so these stay posted content
     private static XElement CreatePostedContent(JsonElement root, JsonElement metadata, string doi, string recordUrl) =>
         new(Crossref + "posted_content",
-            new XAttribute("type", "report"),
+            new XAttribute("type", "other"),
             Language(metadata),
             Contributors(root),
             Titles(metadata),
@@ -359,7 +361,7 @@ public static class FromJsonConverter
             .Select(isbn => new XElement(Crossref + "isbn", new XAttribute("media_type", "print"), isbn));
     }
 
-    // Mirrors isbn_t from common5.3.1.xsd
+    // Mirrors isbn_t from common5.5.0.xsd
     private static bool IsCrossrefIsbn(string? isbn) =>
         !string.IsNullOrEmpty(isbn) &&
         isbn.Length is >= 10 and <= 17 &&

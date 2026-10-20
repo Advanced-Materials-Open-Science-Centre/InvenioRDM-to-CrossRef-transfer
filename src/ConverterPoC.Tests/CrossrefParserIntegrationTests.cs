@@ -15,7 +15,7 @@ public class CrossrefParserIntegrationTests
     private const string CrossrefParserUrl = "https://apps.crossref.org/XSDParse";
     private const string TestDoi = "10.15330/test.26.09.01";
 
-    private static readonly XNamespace Crossref = "http://www.crossref.org/schema/5.3.1";
+    private static readonly XNamespace Crossref = CrossrefSchema.Namespace;
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(2) };
 
     [Theory]
