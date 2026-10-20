@@ -7,11 +7,14 @@ namespace ConverterPoC;
 // Throws on entries it can't read, so a record never silently loses its authors.
 public class ContributorsParser
 {
-    // InvenioRDM contributor role id -> Crossref contributor_role. Crossref has no roles for the
-    // data-related ones (datamanager, datacollector, contactperson, ...), so those are skipped.
+    // InvenioRDM contributor role id -> Crossref contributor_role. Crossref has no data roles, so
+    // data curators map to the closest one (editor) and data collectors to author; the rest
+    // (datamanager, contactperson, ...) are skipped.
     private static readonly Dictionary<string, string> CrossrefRoles = new()
     {
         ["editor"] = "editor",
+        ["datacurator"] = "editor",
+        ["datacollector"] = "author",
     };
 
     public static XElement ConvertContributorsToXml(XNamespace nameSpace, JsonElement root)

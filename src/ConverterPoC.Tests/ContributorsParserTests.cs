@@ -33,6 +33,21 @@ public class ContributorsParserTests
     }
 
     [Theory]
+    [InlineData("datacurator", "editor")]
+    [InlineData("datacollector", "author")]
+    public void DataContributors_GetClosestCrossrefRole(string role, string crossrefRole)
+    {
+        var contributors = Parse(Creators, $$"""
+            [{ "person_or_org": { "type": "personal", "given_name": "Data", "family_name": "Person" }, "role": { "id": "{{role}}" } }]
+            """);
+
+        var person = contributors.Elements(Crossref + "person_name").Last();
+        Assert.Equal("Person", person.Element(Crossref + "surname")!.Value);
+        Assert.Equal(crossrefRole, person.Attribute("contributor_role")!.Value);
+        Assert.Equal("additional", person.Attribute("sequence")!.Value);
+    }
+
+    [Theory]
     [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Manager" }, "role": { "id": "datamanager" } }]""")]
     [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Contact" }, "role": { "id": "contactperson" } }]""")]
     [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Norole" } }]""")]
