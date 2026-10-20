@@ -21,6 +21,13 @@ public class CrossrefSchemaTests
             references: """[{ "reference": "Reference 1" }]""",
             description: "<p>Abstract with <strong>bold</strong> and x<sup>2</sup></p>",
             languages: """[{ "id": "ukr" }]""",
+            contributors: """
+                [
+                  { "person_or_org": { "type": "personal", "family_name": "Editor" }, "role": { "id": "editor" } },
+                  { "person_or_org": { "type": "personal", "family_name": "Curator" }, "role": { "id": "datacurator" } },
+                  { "person_or_org": { "type": "organizational", "name": "Host" }, "role": { "id": "hostinginstitution" } }
+                ]
+                """,
             customFields: """
                 { "journal:journal": { "title": "Test Journal", "issn": "1729-4428", "volume": "26", "issue": "1", "pages": "132-139" } }
                 """,
@@ -34,7 +41,7 @@ public class CrossrefSchemaTests
     {
         CrossrefSchema.Validate(TestRecords.Convert(TestRecords.Json()).ToString());
 
-        Assert.True(File.Exists(Path.Combine(CrossrefSchema.CacheDirectory, "crossref5.3.1.xsd")));
+        Assert.True(File.Exists(Path.Combine(CrossrefSchema.CacheDirectory, CrossrefSchema.FileName)));
         Assert.True(File.Exists(Path.Combine(CrossrefSchema.CacheDirectory, "standard-modules", "mathml3", "mathml3.xsd")));
     }
 

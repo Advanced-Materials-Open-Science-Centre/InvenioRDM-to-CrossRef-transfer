@@ -21,7 +21,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: src/ConverterPoC.Tests/bin/Release/net10.0/Schemas
-          key: crossref-schemas-5.3.1
+          key: crossref-schemas-5.5.0
 
       - name: Restore
         run: dotnet restore src/ConverterPoC.sln
@@ -48,7 +48,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: src/ConverterPoC.Tests/bin/Release/net10.0/Schemas
-          key: crossref-schemas-5.3.1
+          key: crossref-schemas-5.5.0
 
       - name: Test
         run: dotnet test src/ConverterPoC.Tests --configuration Release --filter "Category=Integration" --logger "console;verbosity=normal"

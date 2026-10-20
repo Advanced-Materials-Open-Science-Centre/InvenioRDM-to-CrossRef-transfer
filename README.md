@@ -70,7 +70,7 @@ For each entry in `DoiMappings` the tool:
 
 1. Loads the record from Invenio RDM and saves it as `<record id>.json`.
 2. Checks the DOI: the record must not already list a different DOI under the same prefix, and the DOI must not be registered in CrossRef for another record. DOIs from other prefixes (e.g. Zenodo) only produce a warning.
-3. Converts the record to `<record id>.xml` and validates it against the CrossRef 5.3.1 schema. The schema files are downloaded from https://www.crossref.org/schemas/ the first time they are needed and cached in a `Schemas` folder next to the executable; delete that folder to download them again.
+3. Converts the record to `<record id>.xml` and validates it against the CrossRef 5.5.0 schema. The schema files are downloaded from https://www.crossref.org/schemas/ the first time they are needed and cached in a `Schemas` folder next to the executable; delete that folder to download them again.
 4. Uploads it to CrossRef under a unique file name.
 
 A record that fails any step is reported and skipped; if CrossRef rejects the credentials, the remaining records are not processed. Requests that only read (Invenio RDM records, CrossRef lookups and deposit results) are retried on temporary errors; uploads are not. The tool then waits up to `ResultTimeoutMinutes` for CrossRef's deposit results and prints them.

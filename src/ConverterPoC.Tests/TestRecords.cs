@@ -6,7 +6,7 @@ namespace ConverterPoC.Tests;
 
 internal static class TestRecords
 {
-    public static readonly XNamespace Crossref = "http://www.crossref.org/schema/5.3.1";
+    public static readonly XNamespace Crossref = CrossrefSchema.Namespace;
     public static readonly XNamespace Jats = "http://www.ncbi.nlm.nih.gov/JATS1";
 
     public static readonly Depositor Depositor = new("Test Depositor", "depositor@example.org", "Test Registrant");

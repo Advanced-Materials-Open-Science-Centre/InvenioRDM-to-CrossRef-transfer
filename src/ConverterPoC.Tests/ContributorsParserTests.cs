@@ -25,24 +25,33 @@ public class ContributorsParserTests
             """);
 
         Assert.Equal(
-            [("Jane", "author", "first"), ("John", "author", "additional"), ("Eddie", "editor", "additional"), ("Dana", "editor", "additional")],
+            [
+                ("Jane", "crossref:author", "first"),
+                ("John", "crossref:author credit:investigation", "additional"),
+                ("Eddie", "crossref:editor", "additional"),
+                ("Dana", "credit:data-curation", "additional")
+            ],
             contributors.Elements(Crossref + "person_name").Select(p => (
                 p.Element(Crossref + "given_name")!.Value,
-                p.Attribute("contributor_role")!.Value,
+                Roles(p),
                 p.Attribute("sequence")!.Value)));
     }
 
     [Theory]
-    [InlineData("""{ "id": "datacollector" }""", "author")]
-    [InlineData("""{ "id": "researcher" }""", "author")]
-    [InlineData("""{ "id": "projectleader" }""", "author")]
-    [InlineData("""{ "id": "datacurator" }""", "editor")]
-    [InlineData("""{ "id": "datamanager" }""", "editor")]
-    [InlineData("""{ "id": "contactperson" }""", "editor")]
-    [InlineData("""{ "id": "hostinginstitution" }""", "editor")]
-    [InlineData("""{ "id": "unknown-role" }""", "editor")]
-    [InlineData("""{}""", "editor")]
-    public void Contributors_GetClosestCrossrefRole(string role, string crossrefRole)
+    [InlineData("""{ "id": "editor" }""", "crossref:editor")]
+    [InlineData("""{ "id": "contactperson" }""", "crossref:corresponding-author")]
+    [InlineData("""{ "id": "datacurator" }""", "credit:data-curation")]
+    [InlineData("""{ "id": "datamanager" }""", "credit:data-curation")]
+    [InlineData("""{ "id": "datacollector" }""", "credit:investigation")]
+    [InlineData("""{ "id": "researcher" }""", "credit:investigation")]
+    [InlineData("""{ "id": "projectleader" }""", "credit:supervision")]
+    [InlineData("""{ "id": "projectmanager" }""", "credit:project-administration")]
+    [InlineData("""{ "id": "hostinginstitution" }""", "credit:resources")]
+    [InlineData("""{ "id": "sponsor" }""", "credit:funding-acquisition")]
+    [InlineData("""{ "id": "rightsholder" }""", "crossref:other")]
+    [InlineData("""{ "id": "unknown-role" }""", "crossref:other")]
+    [InlineData("""{}""", "crossref:other")]
+    public void Contributors_GetClosestRole(string role, string expected)
     {
         var contributors = Parse(Creators, $$"""
             [{ "person_or_org": { "type": "personal", "given_name": "Some", "family_name": "Person" }, "role": {{role}} }]
@@ -50,8 +59,22 @@ public class ContributorsParserTests
 
         var person = contributors.Elements(Crossref + "person_name").Last();
         Assert.Equal("Person", person.Element(Crossref + "surname")!.Value);
-        Assert.Equal(crossrefRole, person.Attribute("contributor_role")!.Value);
+        Assert.Equal(expected, Roles(person));
         Assert.Equal("additional", person.Attribute("sequence")!.Value);
+    }
+
+    [Theory]
+    [InlineData("""{ "id": "editor" }""", "editor")]
+    [InlineData("""{ "id": "hostinginstitution" }""", "other")]
+    [InlineData("""{}""", "other")]
+    public void OrganizationalContributor_GetsCrossrefRoleAttribute(string role, string expected)
+    {
+        var contributors = Parse(Creators, $$"""
+            [{ "person_or_org": { "type": "organizational", "name": "Test Organization" }, "role": {{role}} }]
+            """);
+
+        var organization = Assert.Single(contributors.Elements(Crossref + "organization"));
+        Assert.Equal(expected, organization.Attribute("contributor_role")!.Value);
     }
 
     [Fact]
@@ -70,6 +93,7 @@ public class ContributorsParserTests
         var organization = Assert.Single(contributors.Elements(Crossref + "organization"));
         Assert.Equal("Test Organization", organization.Value);
         Assert.Equal("first", organization.Attribute("sequence")!.Value);
+        Assert.Equal("author", organization.Attribute("contributor_role")!.Value);
     }
 
     // These used to be swallowed, depositing the record without any authors
@@ -121,10 +145,13 @@ public class ContributorsParserTests
             }]
             """).Elements(Crossref + "person_name").Single();
 
-        Assert.Equal(["given_name", "surname", "affiliations", "ORCID"], person.Elements().Select(e => e.Name.LocalName));
+        Assert.Equal(["given_name", "surname", "role", "affiliations", "ORCID"], person.Elements().Select(e => e.Name.LocalName));
         Assert.Equal("Test University", person.Element(Crossref + "affiliations")!.Value);
         Assert.Equal("https://orcid.org/0000-0002-1825-0097", person.Element(Crossref + "ORCID")!.Value);
     }
+
+    private static string Roles(XElement person) =>
+        string.Join(" ", person.Elements(Crossref + "role").Select(r => $"{r.Attribute("vocab")!.Value}:{r.Attribute("type")!.Value}"));
 
     private static XElement Parse(string creators, string? contributors = null)
     {
