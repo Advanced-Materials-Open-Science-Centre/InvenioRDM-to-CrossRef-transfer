@@ -3,16 +3,16 @@ using System.Xml.Linq;
 
 namespace ConverterPoC;
 
-// Creators become authors; contributors are included when their role has a Crossref equivalent.
+// Creators become authors; contributors get the Crossref role closest to their InvenioRDM one.
 // Throws on entries it can't read, so a record never silently loses its authors.
 public class ContributorsParser
 {
-    // InvenioRDM contributor role id -> Crossref contributor_role. Crossref has no roles for the
-    // data-related ones (datamanager, datacollector, contactperson, ...), so those are skipped.
-    private static readonly Dictionary<string, string> CrossrefRoles = new()
-    {
-        ["editor"] = "editor",
-    };
+    // Crossref's only non-review roles are author and editor, so InvenioRDM roles that produce the
+    // content become authors and every other role (curating, managing, contact, hosting, ...) editors
+    private static readonly HashSet<string> AuthorRoles =
+    [
+        "datacollector", "producer", "researcher", "researchgroup", "projectleader", "projectmember", "workpackageleader",
+    ];
 
     public static XElement ConvertContributorsToXml(XNamespace nameSpace, JsonElement root)
     {
@@ -25,22 +25,11 @@ public class ContributorsParser
         if (entries.Count == 0)
             throw new InvalidOperationException("Record has no creators");
 
-        var skippedRoles = new List<string>();
-
         foreach (var contributor in Array(metadata, "contributors"))
         {
             var role = String(Object(contributor, "role"), "id") ?? "";
 
-            if (CrossrefRoles.TryGetValue(role, out var crossrefRole))
-                entries.Add((contributor, crossrefRole));
-            else
-                skippedRoles.Add(role == "" ? "(none)" : role);
-        }
-
-        if (skippedRoles.Count > 0)
-        {
-            Console.WriteLine($"Skipped {skippedRoles.Count} contributor(s) with roles that have no Crossref equivalent: " +
-                              string.Join(", ", skippedRoles.Distinct()));
+            entries.Add((contributor, AuthorRoles.Contains(role) ? "author" : "editor"));
         }
 
         return new XElement(nameSpace + "contributors",
