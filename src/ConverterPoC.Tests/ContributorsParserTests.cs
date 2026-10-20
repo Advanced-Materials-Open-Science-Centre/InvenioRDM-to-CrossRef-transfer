@@ -15,7 +15,7 @@ public class ContributorsParserTests
         """;
 
     [Fact]
-    public void Creators_AreAuthors_AndEditorContributorsAreIncluded()
+    public void Creators_AreAuthors_AndAllContributorsAreIncluded()
     {
         var contributors = Parse(Creators, """
             [
@@ -25,7 +25,7 @@ public class ContributorsParserTests
             """);
 
         Assert.Equal(
-            [("Jane", "author", "first"), ("John", "author", "additional"), ("Eddie", "editor", "additional")],
+            [("Jane", "author", "first"), ("John", "author", "additional"), ("Eddie", "editor", "additional"), ("Dana", "editor", "additional")],
             contributors.Elements(Crossref + "person_name").Select(p => (
                 p.Element(Crossref + "given_name")!.Value,
                 p.Attribute("contributor_role")!.Value,
@@ -33,12 +33,19 @@ public class ContributorsParserTests
     }
 
     [Theory]
-    [InlineData("datacurator", "editor")]
-    [InlineData("datacollector", "author")]
-    public void DataContributors_GetClosestCrossrefRole(string role, string crossrefRole)
+    [InlineData("""{ "id": "datacollector" }""", "author")]
+    [InlineData("""{ "id": "researcher" }""", "author")]
+    [InlineData("""{ "id": "projectleader" }""", "author")]
+    [InlineData("""{ "id": "datacurator" }""", "editor")]
+    [InlineData("""{ "id": "datamanager" }""", "editor")]
+    [InlineData("""{ "id": "contactperson" }""", "editor")]
+    [InlineData("""{ "id": "hostinginstitution" }""", "editor")]
+    [InlineData("""{ "id": "unknown-role" }""", "editor")]
+    [InlineData("""{}""", "editor")]
+    public void Contributors_GetClosestCrossrefRole(string role, string crossrefRole)
     {
         var contributors = Parse(Creators, $$"""
-            [{ "person_or_org": { "type": "personal", "given_name": "Data", "family_name": "Person" }, "role": { "id": "{{role}}" } }]
+            [{ "person_or_org": { "type": "personal", "given_name": "Some", "family_name": "Person" }, "role": {{role}} }]
             """);
 
         var person = contributors.Elements(Crossref + "person_name").Last();
@@ -47,17 +54,12 @@ public class ContributorsParserTests
         Assert.Equal("additional", person.Attribute("sequence")!.Value);
     }
 
-    [Theory]
-    [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Manager" }, "role": { "id": "datamanager" } }]""")]
-    [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Contact" }, "role": { "id": "contactperson" } }]""")]
-    [InlineData("""[{ "person_or_org": { "type": "personal", "family_name": "Norole" } }]""")]
-    [InlineData("""[]""")]
-    public void ContributorsWithoutCrossrefRole_AreSkipped(string contributorsJson)
+    [Fact]
+    public void NoContributors_LeavesOnlyCreators()
     {
-        var contributors = Parse(Creators, contributorsJson);
+        var contributors = Parse(Creators, "[]");
 
         Assert.Equal(["Doe", "Roe"], contributors.Descendants(Crossref + "surname").Select(s => s.Value));
-        Assert.All(contributors.Elements(), e => Assert.Equal("author", e.Attribute("contributor_role")!.Value));
     }
 
     [Fact]
