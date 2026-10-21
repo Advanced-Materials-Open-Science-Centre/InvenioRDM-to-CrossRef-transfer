@@ -77,6 +77,77 @@ public class ContributorsParserTests
         Assert.Equal(expected, organization.Attribute("contributor_role")!.Value);
     }
 
+    // As in dataset.cnu.edu.ua record nreen-mds56: creators listed again as contributors, the ORCIDs only there
+    [Fact]
+    public void ContributorMatchingACreator_IsMergedIntoIt()
+    {
+        var contributors = Parse(
+            """
+            [
+              { "person_or_org": { "type": "personal", "given_name": "Jane", "family_name": "Doe" }, "role": { "id": "contactperson" },
+                "affiliations": [{ "name": "University A" }] },
+              { "person_or_org": { "type": "personal", "given_name": "John", "family_name": "Roe" }, "role": { "id": "datacollector" } },
+              { "person_or_org": { "type": "personal", "given_name": "Max", "family_name": "Moe" } }
+            ]
+            """,
+            """
+            [
+              { "person_or_org": { "type": "personal", "given_name": " jane ", "family_name": "DOE",
+                                   "identifiers": [{ "scheme": "orcid", "identifier": "0000-0002-1825-0097" }] },
+                "role": { "id": "datacurator" }, "affiliations": [{ "name": "university a" }, { "name": "University B" }] },
+              { "person_or_org": { "type": "personal", "given_name": "John", "family_name": "Roe" }, "role": { "id": "datacollector" } },
+              { "person_or_org": { "type": "personal", "given_name": "Max", "family_name": "Moe" }, "role": { "id": "datacollector" } },
+              { "person_or_org": { "type": "personal", "given_name": "Eddie", "family_name": "Tor" }, "role": { "id": "editor" } }
+            ]
+            """);
+
+        var people = contributors.Elements(Crossref + "person_name").ToList();
+
+        Assert.Equal(
+            [
+                ("Jane", "crossref:author crossref:corresponding-author credit:data-curation", "first"),
+                ("John", "crossref:author credit:investigation", "additional"),
+                ("Max", "crossref:author credit:investigation", "additional"),
+                ("Eddie", "crossref:editor", "additional")
+            ],
+            people.Select(p => (p.Element(Crossref + "given_name")!.Value, Roles(p), p.Attribute("sequence")!.Value)));
+
+        Assert.Equal("https://orcid.org/0000-0002-1825-0097", people[0].Element(Crossref + "ORCID")!.Value);
+        Assert.Equal(["University A", "University B"], people[0].Descendants(Crossref + "institution_name").Select(n => n.Value));
+    }
+
+    [Fact]
+    public void SameNameWithDifferentOrcids_IsNotMerged()
+    {
+        var contributors = Parse(
+            """[{ "person_or_org": { "type": "personal", "given_name": "Jane", "family_name": "Doe", "identifiers": [{ "scheme": "orcid", "identifier": "0000-0002-1825-0097" }] } }]""",
+            """[{ "person_or_org": { "type": "personal", "given_name": "Jane", "family_name": "Doe", "identifiers": [{ "scheme": "orcid", "identifier": "0000-0001-5109-3700" }] }, "role": { "id": "editor" } }]""");
+
+        Assert.Equal(2, contributors.Elements(Crossref + "person_name").Count());
+    }
+
+    [Fact]
+    public void ContributorWithTheSameOrcid_IsMergedDespiteADifferentName()
+    {
+        var contributors = Parse(
+            """[{ "person_or_org": { "type": "personal", "given_name": "Jane", "family_name": "Doe", "identifiers": [{ "scheme": "orcid", "identifier": "0000-0002-1825-0097" }] } }]""",
+            """[{ "person_or_org": { "type": "personal", "given_name": "J.", "family_name": "Doe", "identifiers": [{ "scheme": "orcid", "identifier": "0000-0002-1825-0097" }] }, "role": { "id": "editor" } }]""");
+
+        var person = Assert.Single(contributors.Elements(Crossref + "person_name"));
+        Assert.Equal("crossref:author crossref:editor", Roles(person));
+    }
+
+    [Fact]
+    public void OrganizationListedTwice_IsMerged()
+    {
+        var contributors = Parse(
+            """[{ "person_or_org": { "type": "organizational", "name": "Test Organization" } }]""",
+            """[{ "person_or_org": { "type": "organizational", "name": "test organization" }, "role": { "id": "hostinginstitution" } }]""");
+
+        var organization = Assert.Single(contributors.Elements());
+        Assert.Equal("author", organization.Attribute("contributor_role")!.Value);
+    }
+
     [Fact]
     public void NoContributors_LeavesOnlyCreators()
     {
