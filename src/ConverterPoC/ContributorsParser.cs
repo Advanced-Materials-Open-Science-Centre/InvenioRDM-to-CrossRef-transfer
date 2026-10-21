@@ -39,27 +39,80 @@ public class ContributorsParser
 
         // Creators are the authors of the work; their InvenioRDM role, if any, is added to that
         var entries = Array(metadata, "creators")
-            .Select(creator => (Contributor: creator, Roles: Roles.TryGetValue(RoleId(creator), out var role)
-                ? new List<Role> { Author, role }
-                : [Author]))
+            .Select(creator => new Entry([creator], Roles.TryGetValue(RoleId(creator), out var role) ? [Author, role] : [Author]))
             .ToList();
 
         if (entries.Count == 0)
             throw new InvalidOperationException("Record has no creators");
 
-        entries.AddRange(Array(metadata, "contributors")
-            .Select(contributor => (contributor, new List<Role> { Roles.GetValueOrDefault(RoleId(contributor), Other) })));
+        // Depositors often list creators again as contributors (e.g. to give them a role or an ORCID);
+        // such a contributor is merged into that entry instead of appearing twice
+        foreach (var contributor in Array(metadata, "contributors"))
+        {
+            var role = Roles.GetValueOrDefault(RoleId(contributor), Other);
+            var same = entries.FirstOrDefault(entry => IsSame(entry.Records[0], contributor));
+
+            if (same == null)
+            {
+                entries.Add(new Entry([contributor], [role]));
+                continue;
+            }
+
+            same.Records.Add(contributor);
+
+            if (!same.Roles.Contains(role))
+                same.Roles.Add(role);
+        }
 
         return new XElement(nameSpace + "contributors",
             entries.Select((entry, index) =>
-                ToXml(nameSpace, entry.Contributor, entry.Roles, index == 0 ? "first" : "additional", index + 1)));
+                ToXml(nameSpace, entry, index == 0 ? "first" : "additional", index + 1)));
     }
+
+    // The InvenioRDM creator/contributor entries of one person or organization, first one leading
+    private record Entry(List<JsonElement> Records, List<Role> Roles);
 
     private static string RoleId(JsonElement contributor) => String(Object(contributor, "role"), "id") ?? "";
 
-    private static XElement ToXml(XNamespace ns, JsonElement contributor, List<Role> roles, string sequence, int position)
+    // Same type and name; people with different ORCIDs are different people despite the name
+    private static bool IsSame(JsonElement a, JsonElement b)
     {
-        var personOrOrg = Object(contributor, "person_or_org");
+        var (personA, personB) = (Object(a, "person_or_org"), Object(b, "person_or_org"));
+        var type = String(personA, "type");
+
+        if (type != String(personB, "type"))
+            return false;
+
+        if (type == "organizational")
+            return SameName(String(personA, "name"), String(personB, "name"));
+
+        var (orcidA, orcidB) = (Orcid(personA), Orcid(personB));
+
+        if (orcidA != null && orcidB != null)
+            return orcidA == orcidB;
+
+        var (givenA, familyA) = (String(personA, "given_name"), String(personA, "family_name"));
+
+        return Normalize(givenA + familyA) != "" &&
+               SameName(givenA, String(personB, "given_name")) &&
+               SameName(familyA, String(personB, "family_name"));
+    }
+
+    private static bool SameName(string? a, string? b) =>
+        string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
+
+    private static string Normalize(string? name) => string.Join(' ', (name ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private static string? Orcid(JsonElement personOrOrg) =>
+        Array(personOrOrg, "identifiers")
+            .Where(identifier => string.Equals(String(identifier, "scheme"), "orcid", StringComparison.OrdinalIgnoreCase))
+            .Select(identifier => String(identifier, "identifier")?.Trim())
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static XElement ToXml(XNamespace ns, Entry entry, string sequence, int position)
+    {
+        var roles = entry.Roles;
+        var personOrOrg = Object(entry.Records[0], "person_or_org");
         var type = String(personOrOrg, "type");
 
         if (type == "organizational")
@@ -85,17 +138,18 @@ public class ContributorsParser
         if (string.IsNullOrWhiteSpace(givenName) && string.IsNullOrWhiteSpace(familyName))
             throw new InvalidOperationException($"Creator/contributor {position} has no name");
 
-        var institutions = Array(contributor, "affiliations")
+        var institutions = entry.Records
+            .SelectMany(record => Array(record, "affiliations"))
             .Select(affiliation => String(affiliation, "name"))
             .Where(name => !string.IsNullOrWhiteSpace(name))
+            .DistinctBy(name => Normalize(name).ToUpperInvariant())
             .Select(name => new XElement(ns + "institution", new XElement(ns + "institution_name", name)))
             .ToList();
 
         // Crossref takes a single ORCID per person
-        var orcid = Array(personOrOrg, "identifiers")
-            .Where(identifier => string.Equals(String(identifier, "scheme"), "orcid", StringComparison.OrdinalIgnoreCase))
-            .Select(identifier => String(identifier, "identifier"))
-            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        var orcid = entry.Records
+            .Select(record => Orcid(Object(record, "person_or_org")))
+            .FirstOrDefault(value => value != null);
 
         return new XElement(ns + "person_name",
             new XAttribute("sequence", sequence),
