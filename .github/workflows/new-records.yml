@@ -7,43 +7,127 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
+  contents: write
   issues: write
 
+# The next DOI comes from doi.json, so two runs at once would hand out the same one
+concurrency: new-records
+
 jobs:
-  check:
-    name: Check for new records
+  deposit:
+    name: Deposit new records
     runs-on: ubuntu-latest
 
     steps:
-      # Looks back to the last successful run rather than a fixed day, so whatever was published
-      # before a delayed, dropped or failed run is reported by the next one
-      - name: Check for new records
+      - uses: actions/checkout@v7
+
+      # A record is new until doi.json lists it, so a failed deposit is retried by the next run.
+      # The records before this date were deposited by hand and aren't in doi.json
+      - name: Find new records
+        id: find
+        run: |
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 60 \
+            --get https://dataset.cnu.edu.ua/api/records \
+            --data-urlencode 'q=created:[2026-10-27 TO *]' --data sort=newest --data size=100 \
+            --output records.json
+
+          # Oldest first, so the DOIs follow the publication order
+          jq --slurpfile deposited doi.json \
+            '[.hits.hits[] | select(.id as $id | $deposited[0] | any(.[]; . == $id) | not)] | reverse' \
+            records.json > new-records.json
+
+          count=$(jq length new-records.json)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "New records: $count" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-dotnet@v6
+        if: steps.find.outputs.count != '0'
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        if: steps.find.outputs.count != '0'
+        run: dotnet build src/ConverterPoC --configuration Release
+
+      # One run of the tool per record, because its exit code says how that record went. Each
+      # pair is pushed straight away, so a later failure can't lose a DOI that is registered
+      - name: Deposit
+        if: steps.find.outputs.count != '0'
+        env:
+          CROSSREF_API_URL: https://doi.crossref.org/servlet/deposit
+          CROSSREF_USER: ${{ secrets.CROSSREF_USER }}
+          CROSSREF_PASSWORD: ${{ secrets.CROSSREF_PASSWORD }}
+          DEPOSITOR_NAME: ${{ secrets.DEPOSITOR_NAME }}
+          DEPOSITOR_EMAIL: ${{ secrets.DEPOSITOR_EMAIL }}
+          REGISTRANT: ${{ secrets.REGISTRANT }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          push_doi_json() {
+            for attempt in 1 2 3; do
+              git pull --quiet --rebase && git push --quiet && return 0
+              sleep 10
+            done
+            return 1
+          }
+
+          tool=src/ConverterPoC/bin/Release/net10.0
+          prefix="10.15330/dataset.$(TZ=Europe/Kyiv date +%y.%m)."
+          failed=0
+
+          while IFS=$'\t' read -r id url title; do
+            last=$(jq --arg prefix "$prefix" '[keys[] | select(startswith($prefix)) | ltrimstr($prefix) | tonumber] | max // 0' doi.json)
+            doi=$prefix$(printf '%02d' $((last + 1)))
+
+            jq --null-input --arg doi "$doi" --arg id "$id" '{
+              CrossRefApiUrl: env.CROSSREF_API_URL,
+              CrossRefUser: env.CROSSREF_USER,
+              CrossRefPassword: env.CROSSREF_PASSWORD,
+              DepositorName: env.DEPOSITOR_NAME,
+              DepositorEmail: env.DEPOSITOR_EMAIL,
+              Registrant: env.REGISTRANT,
+              ResultTimeoutMinutes: 30,
+              DoiMappings: [{ Doi: $doi, DepositoryRecordId: $id }]
+            }' > "$tool/config.local.json"
+
+            code=0
+            (cd "$tool" && dotnet ConverterPoC.dll) || code=$?
+
+            case $code in
+              0) result="deposited as \`$doi\`" ;;
+              2) result="uploaded as \`$doi\`, but Crossref hasn't confirmed it yet" ;;
+              *) result="failed, the next run tries again"; failed=1 ;;
+            esac
+
+            # An unconfirmed deposit is added too: depositing it again could give the record a
+            # second DOI
+            if [ "$code" -eq 0 ] || [ "$code" -eq 2 ]; then
+              jq --arg doi "$doi" --arg id "$id" '. + {($doi): $id}' doi.json > doi.json.new
+              mv doi.json.new doi.json
+              git add doi.json
+              git commit --quiet --message "Deposit $doi for record $id"
+              push_doi_json || { result="$result, but doi.json couldn't be pushed: add the pair by hand"; failed=1; }
+            fi
+
+            echo "- [$title]($url): $result" >> report.md
+          done < <(jq --raw-output '.[] | [.id, .links.self_html, .metadata.title] | @tsv' new-records.json)
+
+          exit "$failed"
+
+      - name: Report
+        if: always() && hashFiles('report.md') != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          COUNT: ${{ steps.find.outputs.count }}
           # Nobody watches this repository, so an unassigned issue wouldn't notify anyone
           ASSIGNEE: klym1
         run: |
-          since=$(gh run list --workflow "$GITHUB_WORKFLOW" --status success --limit 1 --json createdAt --jq '.[0].createdAt // empty')
-          since=${since:-$(date -u -d '1 day ago' +%FT%TZ)}
-
-          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 60 \
-            --get https://dataset.cnu.edu.ua/api/records \
-            --data-urlencode "q=created:[\"$since\" TO *]" --data sort=newest --data size=100 \
-            --output records.json
-
-          count=$(jq '.hits.total' records.json)
-          if [ "$count" -eq 0 ]; then
-            echo "No records published since $since" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
           {
-            echo "Published since $since:"
             echo
-            jq --raw-output '.hits.hits[] | "- [\(.metadata.title)](\(.links.self_html)): \(.metadata.resource_type.id), `\(.id)`"' records.json
-          } > report.md
+            echo "[Run log]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          } >> report.md
 
           cat report.md >> "$GITHUB_STEP_SUMMARY"
-          gh issue create --title "New records in Invenio RDM: $count" --assignee "$ASSIGNEE" --body-file report.md
+          gh issue create --title "New records in Invenio RDM: $COUNT" --assignee "$ASSIGNEE" --body-file report.md
