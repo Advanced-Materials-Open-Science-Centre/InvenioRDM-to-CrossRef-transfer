@@ -2,7 +2,8 @@ name: New records
 
 on:
   schedule:
-    - cron: '0 19 * * *'
+    # Not on the hour, because GitHub can delay or drop scheduled runs at the start of an hour
+    - cron: '17 19 * * *'
       timezone: "Europe/Kyiv"
   workflow_dispatch:
 
