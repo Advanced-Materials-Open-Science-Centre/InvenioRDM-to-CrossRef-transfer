@@ -104,8 +104,28 @@ dotnet test --filter "Category!=Integration"
 
 Unit tests run offline once the CrossRef schema files are cached (the first run downloads them). Integration tests (`Category=Integration`) fetch real records from https://dataset.cnu.edu.ua/ and validate the converted XML with CrossRef's online schema parser, which only checks the XML and never deposits it. CI runs both on every pull request.
 
-### New record check
+### Automatic deposits
 
-The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:00 Kyiv time and looks for records published on https://dataset.cnu.edu.ua/ since its last successful run, so a delayed or failed run loses nothing. A new version of a record counts as a new record. If it finds any, it opens an issue listing them; the assignee is set in the workflow, because an assignment is what sends the notification. It only reports: nothing is deposited to CrossRef. To check right away, use **Run workflow** on the workflow's page in the Actions tab.
+The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:00 Kyiv time and deposits new records from https://dataset.cnu.edu.ua/ to the production CrossRef system, where a registered DOI is permanent. To run it right away, use **Run workflow** on the workflow's page in the Actions tab. It needs these repository secrets: `CROSSREF_USER`, `CROSSREF_PASSWORD`, `DEPOSITOR_NAME`, `DEPOSITOR_EMAIL` and `REGISTRANT`.
 
-GitHub disables scheduled workflows in public repositories after 60 days without repository activity. If the issues seem to have stopped, check for a disabled notice on the workflow's page and enable it there: the next run reports everything published in the meantime.
+[`doi.json`](doi.json) maps each DOI the workflow deposited to its record id:
+
+```json
+{
+  "10.15330/dataset.26.10.02": "dhd7p-6fh43"
+}
+```
+
+A record created on or after 2026-10-27 is new until `doi.json` lists it. A new version of a record is a record of its own, and adding a record to the file by hand keeps it from being deposited. Older records were deposited by hand and are ignored, so they aren't in the file.
+
+For each new record, oldest first, the workflow:
+
+1. Picks the next DOI, `10.15330/dataset.YY.MM.NN`: the current year and month in Kyiv, and the number after the highest one `doi.json` has for that month.
+2. Runs ConverterPoC with that DOI mapping.
+3. When the deposit succeeds, adds the pair to `doi.json` and pushes it.
+
+A deposit CrossRef hasn't confirmed within 30 minutes (exit code `2`) is added too, because depositing it again could give the record a second DOI. If CrossRef rejects it later, remove the pair from `doi.json` and the next run deposits the record again. A failed record isn't added, so the next run tries it again, and the run is marked as failed.
+
+The workflow then opens an issue with the result for each record. The assignee is set in the workflow, because an assignment is what sends the notification.
+
+GitHub disables scheduled workflows in public repositories after 60 days without repository activity. If deposits seem to have stopped, check for a disabled notice on the workflow's page and enable it there: the next run deposits everything published in the meantime.
