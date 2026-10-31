@@ -1,0 +1,49 @@
+name: New records
+
+on:
+  schedule:
+    - cron: '0 19 * * *'
+      timezone: "Europe/Kyiv"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  issues: write
+
+jobs:
+  check:
+    name: Check for new records
+    runs-on: ubuntu-latest
+
+    steps:
+      # Looks back to the last successful run rather than a fixed day, so whatever was published
+      # before a delayed, dropped or failed run is reported by the next one
+      - name: Check for new records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Nobody watches this repository, so an unassigned issue wouldn't notify anyone
+          ASSIGNEE: klym1
+        run: |
+          since=$(gh run list --workflow "$GITHUB_WORKFLOW" --status success --limit 1 --json createdAt --jq '.[0].createdAt // empty')
+          since=${since:-$(date -u -d '1 day ago' +%FT%TZ)}
+
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 60 \
+            --get https://dataset.cnu.edu.ua/api/records \
+            --data-urlencode "q=created:[\"$since\" TO *]" --data sort=newest --data size=100 \
+            --output records.json
+
+          count=$(jq '.hits.total' records.json)
+          if [ "$count" -eq 0 ]; then
+            echo "No records published since $since" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "Published since $since:"
+            echo
+            jq --raw-output '.hits.hits[] | "- [\(.metadata.title)](\(.links.self_html)): \(.metadata.resource_type.id), `\(.id)`"' records.json
+          } > report.md
+
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          gh issue create --title "New records in Invenio RDM: $count" --assignee "$ASSIGNEE" --body-file report.md

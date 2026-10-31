@@ -105,3 +105,9 @@ dotnet test --filter "Category!=Integration"
 ```
 
 Unit tests run offline once the CrossRef schema files are cached (the first run downloads them). Integration tests (`Category=Integration`) fetch real records from https://dataset.cnu.edu.ua/ and validate the converted XML with CrossRef's online schema parser, which only checks the XML and never deposits it. CI runs both on every pull request.
+
+### New record check
+
+The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:00 Kyiv time and looks for records published on https://dataset.cnu.edu.ua/ since its last successful run, so a delayed or failed run loses nothing. A new version of a record counts as a new record. If it finds any, it opens an issue listing them; the assignee is set in the workflow, because an assignment is what sends the notification. It only reports: nothing is deposited to CrossRef. To check right away, use **Run workflow** on the workflow's page in the Actions tab.
+
+GitHub disables scheduled workflows in public repositories after 60 days without repository activity. If the issues seem to have stopped, check for a disabled notice on the workflow's page and enable it there: the next run reports everything published in the meantime.
