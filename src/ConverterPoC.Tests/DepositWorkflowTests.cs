@@ -197,7 +197,7 @@ public sealed class DepositWorkflowTests : IDisposable
         var workflow = new DepositWorkflow(
             TestRecords.Settings,
             RepositoryUrl,
-            new InvenioRDMClient(RepositoryUrl, null, new HttpClient(_http), TimeSpan.Zero),
+            new InvenioRDMClient(RepositoryUrl, new HttpClient(_http), TimeSpan.Zero),
             new CrossrefApiClient("user", "password", DepositUrl, new HttpClient(_http), TimeSpan.Zero),
             _log,
             _output,
