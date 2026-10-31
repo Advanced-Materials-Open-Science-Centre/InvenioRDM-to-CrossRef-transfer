@@ -106,7 +106,7 @@ Unit tests run offline once the CrossRef schema files are cached (the first run 
 
 ### Automatic deposits
 
-The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:00 Kyiv time and deposits new records from https://dataset.cnu.edu.ua/ to the production CrossRef system, where a registered DOI is permanent. To run it right away, use **Run workflow** on the workflow's page in the Actions tab. It needs these repository secrets: `CROSSREF_USER`, `CROSSREF_PASSWORD`, `DEPOSITOR_NAME`, `DEPOSITOR_EMAIL` and `REGISTRANT`.
+The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:17 Kyiv time and deposits new records from https://dataset.cnu.edu.ua/ to the production CrossRef system, where a registered DOI is permanent. To run it right away, use **Run workflow** on the workflow's page in the Actions tab. It needs these repository secrets: `CROSSREF_USER`, `CROSSREF_PASSWORD`, `DEPOSITOR_NAME`, `DEPOSITOR_EMAIL` and `REGISTRANT`.
 
 [`doi.json`](doi.json) maps each DOI the workflow deposited to its record id:
 
