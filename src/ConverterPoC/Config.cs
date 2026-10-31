@@ -6,7 +6,6 @@ namespace ConverterPoC;
 public class Config
 {
     public string ApiUrl { get; set; } = "";
-    public string AccessToken { get; set; } = "";
     public string CrossRefUser { get; set; } = "";
     public string CrossRefPassword { get; set; } = "";
     public string CrossRefApiUrl { get; set; } = "";

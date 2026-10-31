@@ -13,7 +13,7 @@ try
     var workflow = new DepositWorkflow(
         settings,
         config.ApiUrl,
-        new InvenioRDMClient(config.ApiUrl, config.AccessToken),
+        new InvenioRDMClient(config.ApiUrl),
         new CrossrefApiClient(config.CrossRefUser, config.CrossRefPassword, config.CrossRefApiUrl),
         Console.Out,
         Directory.GetCurrentDirectory());

@@ -1,6 +1,5 @@
 {
   "ApiUrl": "https://dataset.cnu.edu.ua/",
-  "AccessToken": "",
   "CrossRefUser": "",
   "CrossRefPassword": "",
   "CrossRefApiUrl": "https://test.crossref.org/servlet/deposit",

@@ -6,14 +6,12 @@ namespace ConverterPoC;
 public class InvenioRDMClient
 {
     private readonly string _apiUrl;
-    private readonly string? _token;
     private readonly HttpClient _client;
     private readonly TimeSpan _retryDelay;
 
-    public InvenioRDMClient(string apiUrl, string? token, HttpClient? httpClient = null, TimeSpan? retryDelay = null)
+    public InvenioRDMClient(string apiUrl, HttpClient? httpClient = null, TimeSpan? retryDelay = null)
     {
         _apiUrl = apiUrl;
-        _token = token;
         _client = httpClient ?? new HttpClient();
         _retryDelay = retryDelay ?? TimeSpan.FromSeconds(2);
     }
@@ -25,10 +23,6 @@ public class InvenioRDMClient
         {
             var request = new HttpRequestMessage(HttpMethod.Get, $"{_apiUrl}api/records/{recordId}");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            // Public records can be read anonymously
-            if (!string.IsNullOrEmpty(_token))
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
 
             return request;
         }, _retryDelay);
