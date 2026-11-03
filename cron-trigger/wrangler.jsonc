@@ -1,0 +1,20 @@
+{
+  "name": "new-records-cron-trigger",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  // The Worker only runs on its schedule, so it doesn't need a public URL
+  "workers_dev": false,
+  "preview_urls": false,
+  "triggers": {
+    // 19:17 in Kyiv is 17:17 UTC in winter and 16:17 UTC in summer
+    "crons": ["17 16 * * *", "17 17 * * *"]
+  },
+  "vars": {
+    "REPOSITORY": "Advanced-Materials-Open-Science-Centre/InvenioRDM_Harvester",
+    "WORKFLOW": "new-records.yml",
+    "BRANCH": "master"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

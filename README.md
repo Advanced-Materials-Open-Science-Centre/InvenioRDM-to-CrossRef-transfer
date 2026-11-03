@@ -106,7 +106,7 @@ Unit tests run offline once the CrossRef schema files are cached (the first run 
 
 ### Automatic deposits
 
-The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:17 Kyiv time and deposits new records from https://dataset.cnu.edu.ua/ to the production CrossRef system, where a registered DOI is permanent. To run it right away, use **Run workflow** on the workflow's page in the Actions tab. It needs these repository secrets: `CROSSREF_USER`, `CROSSREF_PASSWORD`, `DEPOSITOR_NAME`, `DEPOSITOR_EMAIL` and `REGISTRANT`.
+The [New records](.github/workflows/new-records.yml) workflow runs every day at 19:17 Kyiv time (started by a Cloudflare Worker, see [Schedule](#schedule)) and deposits new records from https://dataset.cnu.edu.ua/ to the production CrossRef system, where a registered DOI is permanent. To run it right away, use **Run workflow** on the workflow's page in the Actions tab. It needs these repository secrets: `CROSSREF_USER`, `CROSSREF_PASSWORD`, `DEPOSITOR_NAME`, `DEPOSITOR_EMAIL` and `REGISTRANT`.
 
 [`doi.json`](doi.json) maps each DOI the workflow deposited to its record id:
 
@@ -128,4 +128,17 @@ A deposit CrossRef hasn't confirmed within 30 minutes (exit code `2`) is added t
 
 The workflow then opens an issue with the result for each record. The assignee is set in the workflow, because an assignment is what sends the notification.
 
-GitHub disables scheduled workflows in public repositories after 60 days without repository activity. If deposits seem to have stopped, check for a disabled notice on the workflow's page and enable it there: the next run deposits everything published in the meantime.
+#### Schedule
+
+GitHub starts scheduled workflows hours late, so the workflow has no schedule of its own. The [cron-trigger](cron-trigger) Worker starts it instead with a [Cloudflare Cron Trigger](https://developers.cloudflare.com/workers/configuration/cron-triggers/). Cron Triggers run on UTC, so the Worker runs at 16:17 and 17:17 UTC and only starts the workflow when it is 19:17 in Kyiv.
+
+The Worker needs a fine-grained GitHub token for this repository with the **Actions: Read and write** permission. To deploy it:
+
+```bash
+cd cron-trigger
+npx wrangler login
+npx wrangler secret put GITHUB_TOKEN
+npx wrangler deploy
+```
+
+Run `npx wrangler deploy` again after changing [`wrangler.jsonc`](cron-trigger/wrangler.jsonc) or the Worker's code. A run the Worker couldn't start shows up as an error in the Worker's logs in the Cloudflare dashboard. Nothing is lost if it fails: the next run deposits everything published in the meantime. Renew the token before it expires.
