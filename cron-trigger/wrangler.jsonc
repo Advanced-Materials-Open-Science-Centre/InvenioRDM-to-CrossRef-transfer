@@ -10,7 +10,7 @@
     "crons": ["17 16 * * *", "17 17 * * *"]
   },
   "vars": {
-    "REPOSITORY": "Advanced-Materials-Open-Science-Centre/InvenioRDM_Harvester",
+    "REPOSITORY": "Advanced-Materials-Open-Science-Centre/InvenioRDM-to-CrossRef-transfer",
     "WORKFLOW": "new-records.yml",
     "BRANCH": "master"
   },
