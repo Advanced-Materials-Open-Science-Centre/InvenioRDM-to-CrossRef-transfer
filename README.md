@@ -150,4 +150,38 @@ When a run ends, however it was started, the workflow sends its result to Telegr
 - a bot created with [@BotFather](https://t.me/BotFather), whose token is the `TELEGRAM_BOT_TOKEN` repository secret
 - the chats to send to in the `TELEGRAM_CHAT_IDS` repository variable, separated by commas. Nothing is sent while it isn't set
 
-A bot can only write to someone who has started a chat with it, so send it a message first. That message also gives you the chat id: open `https://api.telegram.org/bot<token>/getUpdates` and take `message.chat.id`. A private chat's id is the user's id; a group's is negative.
+A bot can only write to someone who has started a chat with it, so send it a message first. That message also gives you the chat id: open `https://api.telegram.org/bot<token>/getUpdates` and take `message.chat.id`. A private chat's id is the user's id; a group's is negative. Once the [Telegram bot](#telegram-bot) is deployed, `/whoami` shows both instead, because the bot then receives the messages and `getUpdates` stays empty.
+
+#### Telegram bot
+
+The [telegram-bot](telegram-bot) starts the workflow from Telegram. It runs on [Telegram Serverless](https://core.telegram.org/bots/serverless), so it needs no server, and keeps its state in the bot's built-in database ([`schema.js`](telegram-bot/tgcloud/schema.js)):
+
+- `settings`: the GitHub token, because Telegram Serverless has no secrets store
+- `users`: who may start the workflow, and who owns the bot
+- `dispatches`: who started the workflow from Telegram and when
+
+| Command | Who | What it does |
+|---|---|---|
+| `/run` | allowed users | Starts the workflow |
+| `/status` | allowed users | Shows the latest run and who last started it from Telegram |
+| `/whoami` | anyone | Shows your Telegram id |
+| `/claim` | the first one to send it | Makes you the owner |
+| `/allow <id>`, `/deny <id>`, `/users` | owner | Manage who may start the workflow |
+| `/settoken <token>` | owner | Checks and saves the GitHub token, then deletes the message with it |
+
+The token is the same kind the cron-trigger Worker uses: a fine-grained token for this repository with **Actions: Read and write**. The bot answers commands in groups too; to have it delete `/settoken` messages there, make it an admin, or send that command in a private chat.
+
+To deploy it:
+
+1. In @BotFather, open the bot the notifications use and get its access token from **Serverless → CLI Access**. It isn't the `TELEGRAM_BOT_TOKEN`.
+2. Push the code and create the tables:
+   ```bash
+   cd telegram-bot
+   npm install --save-dev @tgcloud/cli
+   npx tgcloud login
+   npx tgcloud push
+   npx tgcloud migrate
+   ```
+3. Send `/claim` to the bot right away, because whoever sends it first owns the bot, then `/settoken` with the GitHub token.
+
+Run `npx tgcloud push` again after changing the code, and `npx tgcloud migrate` after changing `schema.js`. `npx tgcloud webhook` shows whether Telegram delivers the updates.
