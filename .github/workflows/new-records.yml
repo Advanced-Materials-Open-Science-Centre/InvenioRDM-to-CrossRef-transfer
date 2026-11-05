@@ -110,6 +110,8 @@ jobs:
             fi
 
             echo "- [$title]($url): $result" >> report.md
+            # Telegram gets plain text, so a title can't break its formatting
+            printf -- '- %s: %s\n  %s\n' "$title" "${result//\`/}" "$url" >> telegram.txt
           done < <(jq --raw-output '.[] | [.id, .links.self_html, .metadata.title] | @tsv' new-records.json)
 
           exit "$failed"
@@ -130,3 +132,34 @@ jobs:
 
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           gh issue create --title "New records in Invenio RDM: $COUNT" --assignee "$ASSIGNEE" --body-file report.md
+
+      # Sent also when there is nothing new, so a quiet day is told apart from a run that didn't
+      # happen
+      - name: Notify Telegram
+        if: always() && vars.TELEGRAM_CHAT_IDS != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_IDS: ${{ vars.TELEGRAM_CHAT_IDS }}
+          COUNT: ${{ steps.find.outputs.count }}
+          STATUS: ${{ job.status }}
+        run: |
+          case $COUNT in
+            '') text='New records: the run failed before it could check for them.' ;;
+            0) text='No new records.' ;;
+            *) text="New records: $COUNT"$'\n\n'$(cat telegram.txt 2>/dev/null) ;;
+          esac
+          if [ "$STATUS" != success ] && [ -n "$COUNT" ]; then
+            text+=$'\n\nThe run failed.'
+          fi
+          # A message can't be longer than 4096 characters
+          text="${text:0:3900}"$'\n\n'"Run log: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+          failed=0
+          for chat in ${CHAT_IDS//,/ }; do
+            curl --silent --show-error --fail-with-body --retry 3 --max-time 30 \
+              "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              --data-urlencode "chat_id=$chat" --data-urlencode "text=$text" \
+              --data 'link_preview_options={"is_disabled":true}' --output /dev/null \
+              || { echo "::error::Couldn't notify Telegram chat $chat"; failed=1; }
+          done
+          exit "$failed"

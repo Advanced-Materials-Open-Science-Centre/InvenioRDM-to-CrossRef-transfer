@@ -142,3 +142,12 @@ npx wrangler deploy
 ```
 
 Run `npx wrangler deploy` again after changing [`wrangler.jsonc`](cron-trigger/wrangler.jsonc) or the Worker's code. A run the Worker couldn't start shows up as an error in the Worker's logs in the Cloudflare dashboard. Nothing is lost if it fails: the next run deposits everything published in the meantime. Renew the token before it expires.
+
+#### Telegram notifications
+
+When a run ends, however it was started, the workflow sends its result to Telegram: the number of new records and what happened to each, "No new records", or that the run failed, with a link to the run log. It needs:
+
+- a bot created with [@BotFather](https://t.me/BotFather), whose token is the `TELEGRAM_BOT_TOKEN` repository secret
+- the chats to send to in the `TELEGRAM_CHAT_IDS` repository variable, separated by commas. Nothing is sent while it isn't set
+
+A bot can only write to someone who has started a chat with it, so send it a message first. That message also gives you the chat id: open `https://api.telegram.org/bot<token>/getUpdates` and take `message.chat.id`. A private chat's id is the user's id; a group's is negative.
