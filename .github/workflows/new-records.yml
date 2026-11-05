@@ -133,8 +133,8 @@ jobs:
           cat report.md >> "$GITHUB_STEP_SUMMARY"
           gh issue create --title "New records in Invenio RDM: $COUNT" --assignee "$ASSIGNEE" --body-file report.md
 
-      # Sent by the bot in telegram-bot, also when there is nothing new, so a quiet day is told
-      # apart from a run that didn't happen
+      # Sent also when there is nothing new, so a quiet day is told apart from a run that didn't
+      # happen
       - name: Notify Telegram
         if: always() && vars.TELEGRAM_CHAT_IDS != ''
         env:
