@@ -2,8 +2,8 @@
   "name": "new-records-cron-trigger",
   "main": "src/index.js",
   "compatibility_date": "2026-10-01",
-  // The Worker only runs on its schedule, so it doesn't need a public URL
-  "workers_dev": false,
+  // Telegram's webhook posts to https://new-records-cron-trigger.<subdomain>.workers.dev/telegram
+  "workers_dev": true,
   "preview_urls": false,
   "triggers": {
     // 19:17 in Kyiv is 17:17 UTC in winter and 16:17 UTC in summer
