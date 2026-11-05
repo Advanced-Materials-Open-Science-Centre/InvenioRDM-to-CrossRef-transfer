@@ -1,0 +1,34 @@
+name: Telegram commands
+
+# Tells Telegram which commands the bot in cron-trigger answers, so its chats offer them in the
+# command menu. Runs when this list changes, or by hand
+on:
+  push:
+    branches: [master]
+    paths: [.github/workflows/telegram-commands.yml]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  commands:
+    name: Register the commands
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Register the commands
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          # Keep in step with answer() in cron-trigger/src/index.js
+          COMMANDS: |
+            [
+              { "command": "run", "description": "Start the New records workflow" },
+              { "command": "status", "description": "The latest run of the workflow" },
+              { "command": "whoami", "description": "Your Telegram id and the chat's" },
+              { "command": "help", "description": "What the bot can do" }
+            ]
+        run: |
+          jq --null-input --argjson commands "$COMMANDS" '{commands: $commands}' |
+            curl --silent --show-error --fail-with-body --retry 3 --max-time 30 \
+              "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setMyCommands" \
+              --header 'Content-Type: application/json' --data @-

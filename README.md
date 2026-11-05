@@ -179,10 +179,6 @@ To connect the bot:
      --data url=https://new-records-cron-trigger.<subdomain>.workers.dev/telegram \
      --data secret_token=<secret> --data 'allowed_updates=["message"]'
    ```
-3. Optionally, have Telegram suggest the commands:
-   ```bash
-   curl https://api.telegram.org/bot<bot token>/setMyCommands --header 'Content-Type: application/json' \
-     --data '{"commands":[{"command":"run","description":"Start the New records workflow"},{"command":"status","description":"The latest run of the workflow"},{"command":"whoami","description":"Your Telegram id and the chat'"'"'s"}]}'
-   ```
+3. Run the [Telegram commands](.github/workflows/telegram-commands.yml) workflow from the Actions tab, so the bot's chats offer its commands in the menu. It runs by itself when its list of commands changes.
 
 `https://api.telegram.org/bot<bot token>/getWebhookInfo` shows whether Telegram delivers the messages, and the last error if it doesn't. Changing `TELEGRAM_WEBHOOK_SECRET` needs `setWebhook` again with the new one.
