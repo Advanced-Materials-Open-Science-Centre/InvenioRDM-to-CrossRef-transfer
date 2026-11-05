@@ -154,18 +154,14 @@ A bot can only write to someone who has started a chat with it, so send it a mes
 
 #### Telegram bot
 
-The [telegram-bot](telegram-bot) starts the workflow from Telegram. It runs on [Telegram Serverless](https://core.telegram.org/bots/serverless), so it needs no server, and keeps its state in the bot's built-in database ([`schema.js`](telegram-bot/tgcloud/schema.js)):
-
-- `settings`: the GitHub token, because Telegram Serverless has no secrets store, and who owns the bot
-- `dispatches`: who started the workflow from Telegram and when
+The [telegram-bot](telegram-bot) starts the workflow from Telegram. It runs on [Telegram Serverless](https://core.telegram.org/bots/serverless), so it needs no server, and keeps the GitHub token in the bot's built-in database ([`schema.js`](telegram-bot/tgcloud/schema.js)), because Telegram Serverless has no secrets store.
 
 | Command | Who | What it does |
 |---|---|---|
 | `/run` | anyone | Starts the workflow |
-| `/status` | anyone | Shows the latest run and who last started it from Telegram |
+| `/status` | anyone | Shows the latest run |
 | `/whoami` | anyone | Shows your Telegram id and the chat's |
-| `/claim` | the first one to send it | Makes you the owner, the only one who can change the token |
-| `/settoken <token>` | owner | Checks and saves the GitHub token, then deletes the message with it |
+| `/settoken <token>` | the first one to set a working token, then only them | Checks and saves the GitHub token, then deletes the message with it |
 
 The token is the same kind the cron-trigger Worker uses: a fine-grained token for this repository with **Actions: Read and write**. Anyone who finds the bot can start the workflow; that is harmless, because a run only deposits records that are new, and runs never overlap. The bot answers commands in groups too; to have it delete `/settoken` messages there, make it an admin, or send that command in a private chat.
 
@@ -180,6 +176,6 @@ To deploy it:
    npx tgcloud push
    npx tgcloud migrate
    ```
-3. Send `/claim` to the bot right away, because whoever sends it first owns the bot, then `/settoken` with the GitHub token.
+3. Send the bot `/settoken` with the GitHub token right away, because whoever sets the first working token is the only one who can change it.
 
 Run `npx tgcloud push` again after changing the code, and `npx tgcloud migrate` after changing `schema.js`. `npx tgcloud webhook` shows whether Telegram delivers the updates.
