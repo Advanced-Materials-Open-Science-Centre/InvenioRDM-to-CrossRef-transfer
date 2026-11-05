@@ -150,4 +150,39 @@ When a run ends, however it was started, the workflow sends its result to Telegr
 - a bot created with [@BotFather](https://t.me/BotFather), whose token is the `TELEGRAM_BOT_TOKEN` repository secret
 - the chats to send to in the `TELEGRAM_CHAT_IDS` repository variable, separated by commas. Nothing is sent while it isn't set
 
-A bot can only write to someone who has started a chat with it, so send it a message first. That message also gives you the chat id: open `https://api.telegram.org/bot<token>/getUpdates` and take `message.chat.id`. A private chat's id is the user's id; a group's is negative.
+A bot can only write to someone who has started a chat with it, so send it a message first. That message also gives you the chat id: open `https://api.telegram.org/bot<token>/getUpdates` and take `message.chat.id`. A private chat's id is the user's id; a group's is negative. Once the [Telegram bot](#telegram-bot) is connected, `/whoami` shows both instead, because the bot then receives the messages and `getUpdates` stays empty.
+
+#### Telegram bot
+
+The cron-trigger Worker is also a Telegram bot that starts the workflow. It is the same bot that sends the notifications, and anyone can use it:
+
+| Command | What it does |
+|---|---|
+| `/run` | Starts the workflow |
+| `/status` | Shows the latest run |
+| `/whoami` | Shows your Telegram id and the chat's |
+
+That is harmless, because a run only deposits records that are new, and runs never overlap. Telegram posts each message to the Worker's `/telegram` URL, and the Worker sends its answer back in the response, so it uses its `GITHUB_TOKEN` but no bot token. A request without the webhook's secret token is refused, so only Telegram can post there.
+
+To connect the bot:
+
+1. Pick a secret of up to 256 letters, digits, `_` and `-`, for example from `node -e "console.log(crypto.randomUUID())"`, and give it to the Worker:
+   ```bash
+   cd cron-trigger
+   npx wrangler secret put TELEGRAM_WEBHOOK_SECRET
+   npx wrangler deploy
+   ```
+   `deploy` prints the Worker's URL, `https://new-records-cron-trigger.<subdomain>.workers.dev`.
+2. Point the bot at it, with the bot token and the same secret:
+   ```bash
+   curl https://api.telegram.org/bot<bot token>/setWebhook \
+     --data url=https://new-records-cron-trigger.<subdomain>.workers.dev/telegram \
+     --data secret_token=<secret> --data 'allowed_updates=["message"]'
+   ```
+3. Optionally, have Telegram suggest the commands:
+   ```bash
+   curl https://api.telegram.org/bot<bot token>/setMyCommands --header 'Content-Type: application/json' \
+     --data '{"commands":[{"command":"run","description":"Start the New records workflow"},{"command":"status","description":"The latest run of the workflow"},{"command":"whoami","description":"Your Telegram id and the chat'"'"'s"}]}'
+   ```
+
+`https://api.telegram.org/bot<bot token>/getWebhookInfo` shows whether Telegram delivers the messages, and the last error if it doesn't. Changing `TELEGRAM_WEBHOOK_SECRET` needs `setWebhook` again with the new one.
