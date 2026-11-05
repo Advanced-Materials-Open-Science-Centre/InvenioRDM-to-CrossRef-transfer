@@ -1,24 +1,21 @@
 import { api, db } from 'sdk';
 import { eq, desc } from 'sdk/db';
-import { settings, users, dispatches } from '../schema.js';
+import { settings, dispatches } from '../schema.js';
 import { WORKFLOW_URL, GitHubError, checkToken, startWorkflow, latestRun } from '../lib/github.js';
 
 const HELP = `Starts the New records workflow, which deposits new dataset.cnu.edu.ua records to Crossref.
 
 /run - start the workflow now
 /status - the latest run of the workflow
-/whoami - your Telegram id, for the owner to /allow, and the chat's
+/whoami - your Telegram id and the chat's
 
 Owner only:
-/allow <id> - let a user start the workflow
-/deny <id> - take that back
-/users - who may start it
 /settoken <token> - the GitHub token the bot starts the workflow with`;
 
 const COMMANDS = [
   { command: 'run', description: 'Start the New records workflow' },
   { command: 'status', description: 'The latest run of the workflow' },
-  { command: 'whoami', description: 'Your Telegram id' },
+  { command: 'whoami', description: 'Your Telegram id and the chat\'s' },
   { command: 'help', description: 'What the bot can do' },
 ];
 
@@ -54,75 +51,43 @@ async function answer(message, command, argument) {
   const from = message.from;
   if (!from) return 'Only a user can use this bot.';
 
-  const user = await db.select().from(users).where(eq(users.id, from.id)).get();
-  const name = [from.first_name, from.last_name].filter(Boolean).join(' ') + (from.username ? ` (@${from.username})` : '');
-  if (user && user.name !== name) await db.update(users).set({ name }).where(eq(users.id, from.id)).run();
-
   switch (command) {
     case 'start':
     case 'help':
     case '':
-      return `${HELP}\n\nYour id is ${from.id}.${user ? '' : ' You can\'t start the workflow until the owner allows you.'}`;
+      return HELP;
 
     // The chat id is what the workflow's TELEGRAM_CHAT_IDS variable needs to send the results here
     case 'whoami':
       return `Your id is ${from.id}.${message.chat.id === from.id ? '' : ` This chat's id is ${message.chat.id}.`}`;
 
-    // Whoever claims the bot first becomes its owner, so claim it right after deploying
-    case 'claim': {
-      if (await db.$count(users, eq(users.owner, true))) return 'The bot already has an owner.';
-      await db.insert(users).values({ id: from.id, name, owner: true, addedAt: new Date() })
-        .onConflictDoUpdate({ target: users.id, set: { owner: true } }).run();
-      await api.setMyCommands({ commands: COMMANDS });
-      return 'You own the bot now. Send /settoken with a GitHub token next.';
-    }
-  }
-
-  if (!user) return `You can't use this bot yet. Ask its owner to /allow ${from.id}.`;
-
-  switch (command) {
     case 'run': {
-      await startWorkflow(await token());
+      await startWorkflow(await setting('github_token', 'the bot has no GitHub token yet: the owner has to /settoken one.'));
+      const name = [from.first_name, from.last_name].filter(Boolean).join(' ') + (from.username ? ` (@${from.username})` : '');
       await db.insert(dispatches).values({ userId: from.id, name, at: new Date() }).run();
       return `Started the New records workflow. It takes a few seconds to show up in the runs: ${WORKFLOW_URL}`;
     }
 
     case 'status': {
-      const run = await latestRun(await token());
+      const run = await latestRun(await setting('github_token', 'the bot has no GitHub token yet: the owner has to /settoken one.'));
       const last = await db.select().from(dispatches).orderBy(desc(dispatches.id)).limit(1).get();
       const started = last ? `\nLast started from Telegram by ${last.name} at ${kyivTime(last.at)}.` : '';
       if (!run) return `The workflow hasn't run yet.${started}`;
       return `Latest run: ${run.conclusion ?? run.status}, started ${kyivTime(new Date(run.created_at))}.\n${run.html_url}${started}`;
     }
-  }
 
-  if (!user.owner) return 'Only the owner can do that.';
-
-  switch (command) {
-    case 'allow': {
-      const id = Number(argument);
-      if (!Number.isSafeInteger(id) || id <= 0) return 'Send /allow with the user\'s id. They get it from /whoami.';
-      if (await db.$count(users, eq(users.id, id))) return `User ${id} can already start the workflow.`;
-      await db.insert(users).values({ id, addedAt: new Date() }).run();
-      return `User ${id} can start the workflow now.`;
-    }
-
-    case 'deny': {
-      const id = Number(argument);
-      if (!Number.isSafeInteger(id)) return 'Send /deny with the user\'s id from /users.';
-      if (id === from.id) return 'You can\'t remove yourself.';
-      const { rowsAffected } = await db.run('DELETE FROM users WHERE id = :id AND owner = 0', { ':id': id });
-      return rowsAffected ? `User ${id} can't start the workflow anymore.` : `${argument || 'That'} isn't an allowed user.`;
-    }
-
-    case 'users': {
-      const rows = await db.select().from(users).orderBy(users.addedAt).all();
-      return rows.map(row => `${row.id} ${row.name ?? '(hasn\'t used the bot yet)'}${row.owner ? ' - owner' : ''}`).join('\n');
+    // Whoever claims the bot first owns its token, so claim it right after deploying
+    case 'claim': {
+      if (await db.$count(settings, eq(settings.key, 'owner_id'))) return 'The bot already has an owner.';
+      await db.insert(settings).values({ key: 'owner_id', value: String(from.id) }).run();
+      await api.setMyCommands({ commands: COMMANDS });
+      return 'You own the bot now. Send /settoken with a GitHub token next.';
     }
 
     case 'settoken': {
-      // The token shouldn't stay in the chat history, wherever the check below ends up
-      // In a group that needs the bot to be an admin
+      if (await setting('owner_id') !== String(from.id)) return 'Only the owner can do that.';
+      // The token shouldn't stay in the chat history, wherever the check below ends up. In a group
+      // that needs the bot to be an admin
       const deleted = await api.deleteMessage({ chat_id: message.chat.id, message_id: message.message_id })
         .then(() => true, () => false);
       if (!argument) return 'Send /settoken with a fine-grained GitHub token that has Actions: Read and write on the repository.';
@@ -136,10 +101,11 @@ async function answer(message, command, argument) {
   return `I don't know /${command}. Send /help for what I can do.`;
 }
 
-async function token() {
-  const row = await db.select().from(settings).where(eq(settings.key, 'github_token')).get();
-  if (!row) throw new Error('the bot has no GitHub token yet: the owner has to /settoken one.');
-  return row.value;
+// Throws `missing` when it is given and the setting isn't there
+async function setting(key, missing) {
+  const row = await db.select().from(settings).where(eq(settings.key, key)).get();
+  if (!row && missing) throw new Error(missing);
+  return row?.value ?? null;
 }
 
 function kyivTime(date) {

@@ -1,17 +1,10 @@
-import { table, integer, text, boolean } from 'sdk/db';
+import { table, integer, text } from 'sdk/db';
 
-// Telegram Serverless has no secrets store, so the GitHub token is kept here under 'github_token'
+// 'github_token', kept here because Telegram Serverless has no secrets store, and 'owner_id', the
+// only user who may change it
 export const settings = table('settings', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
-});
-
-// The Telegram users who may start the workflow. The owner also manages them and the token
-export const users = table('users', {
-  id: integer('id').primaryKey(),
-  name: text('name'),
-  owner: boolean('owner').notNull().default(false),
-  addedAt: integer('added_at', { mode: 'timestamp' }).notNull(),
 });
 
 // Who started the workflow from Telegram and when, because GitHub shows the token's owner instead
