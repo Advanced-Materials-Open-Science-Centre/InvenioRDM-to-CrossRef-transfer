@@ -145,7 +145,7 @@ Run `npx wrangler deploy` again after changing [`wrangler.jsonc`](cron-trigger/w
 
 #### Telegram notifications
 
-When a run ends, however it was started, the workflow sends its result to Telegram: the number of new records and what happened to each, "No new records", or that the run failed, with a link to the run log. It needs:
+When a run that found new records ends, however it was started, the workflow sends its result to Telegram: the number of new records, what happened to each and whether the run failed, with a link to the run log. A run that finds none, or fails before it can look, sends nothing. It needs:
 
 - a bot created with [@BotFather](https://t.me/BotFather), whose token is the `TELEGRAM_BOT_TOKEN` repository secret
 - the chats to send to in the `TELEGRAM_CHAT_IDS` repository variable, separated by commas. Nothing is sent while it isn't set
